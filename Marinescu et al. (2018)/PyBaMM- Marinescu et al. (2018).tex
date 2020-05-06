@@ -1,0 +1,146 @@
+\documentclass[11pt,twoside,a4paper]{article}
+%% Packages for Graphics & Figures %%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{graphicx} %%For loading graphic files
+%% Math Packages %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amsfonts}
+\usepackage{fullpage}
+\usepackage{float}
+%\usepackage{parskip}
+\usepackage{mathrsfs}
+\usepackage{mathabx}
+\usepackage{color}
+\usepackage{array}
+\usepackage{graphicx}
+\renewcommand{\thesection}{\arabic{section}}
+\usepackage{natbib}
+\bibliographystyle{abbrv}
+\usepackage{mwe,tikz}
+\usepackage[percent]{overpic}
+\usepackage[section]{placeins}
+\usepackage{cleveref}
+\usepackage{mathtools}
+
+\newcommand\norm[1]{\left\lVert#1\right\rVert}
+
+\begin{document}
+\title{PyBaMM Implementation of Marinescu et al. (2018) Zero-Dimensional Model}
+\author{Dr. Michael Cornish}
+\date{\today}
+\maketitle
+
+\begin{abstract}
+The zero-dimensional differential algebraic model of Marinescu et al. (2018) for Li-S batteries is implemented in PyBaMM. Various idiosyncrasies with the implementation are discussed.  
+\end{abstract}
+
+\section{Marinescu et al. (2018)}
+\subsection{The Model}
+The DAE system is as follows,
+%
+\begin{eqnarray}
+\frac{dS_8^0}{dt} &=& -\frac{n_{s_8}M_{s_8}}{n_eF}i_H - k_sS_8^0 ,\\
+\frac{dS_4^{2-}}{dt} &=& \frac{n_{s_8}M_{s_8}}{n_eF}i_H + \left(1-\frac{f_s}{m_s}S_s\right)k_sS_8^0 -\frac{n_{s_4}M_{s_8}}{n_eF}i_L,\\
+\frac{dS_2^{2-}}{dt} &=& \frac{n_{s_2}M_{s_8}}{n_eF}i_L ,\\
+\frac{dS^{2-}}{dt} &=& \frac{2n_{s}M_{s_8}}{n_eF}i_L -\frac{k_p}{v\rho_s}S_p(S^{2-}-S^{2-}_{\star}) ,\\ 
+\frac{dS_p}{dt} &=& \frac{k_p}{v\rho_s}S_p(S^{2-}-S^{2-}_{\star}), \\
+\frac{dS_s}{dt} &=& k_sS_8
+\end{eqnarray}
+%
+along with the algebraic system,
+%
+\begin{equation}
+I = i_H + i_L.
+\end{equation}
+%
+The current functions are, 
+%
+\begin{eqnarray}
+i_H &=& -2i_{H,0}a_r\sinh\left(\frac{n_eF\eta_H}{2RT}\right), \\
+i_L &=& -2i_{L,0}a_r\sinh\left(\frac{n_eF\eta_L}{2RT}\right),
+\end{eqnarray}
+%
+with surface overpotentials,
+%
+\begin{eqnarray}
+\eta_H &=& V-E_H ,\\
+\eta_L &=& V-E_L,
+\end{eqnarray}
+%
+and potentials given via the Nernst equation, 
+%
+\begin{eqnarray}
+E_H &=& E_H^0 + \frac{RT}{4F}\ln\left(f_H\frac{S_8^0}{(S_4^{2-})^2}\right) ,\\
+E_L &=& E_L^0 + \frac{RT}{4F}\ln\left(f_L\frac{S_4^{2-}}{(S^{2-})^2S_2^{2-}}\right).
+\end{eqnarray}
+%
+It is important to note that $k_s = 0$ on discharge but $k_s = 0.0002$ on charge. 
+\subsection{Conservation Equations}
+The above system does not adhere to mass conservation. We should expect that the mass conservation constraint, 
+%
+\begin{equation}
+m_s = \sum_i S_i,
+\end{equation}
+%
+should translate to the dynamical system by differentiating both sides by time to get, 
+%
+\begin{equation}
+0 = \sum_i \frac{dS_i}{dt}.
+\end{equation}
+%
+However, this is not the case. The right hand side equals $\left(1-\frac{f_s}{m_s}S_s\right)k_sS_8^0$, which during discharge does equal zero since to $k_s=0$. Indeed, there is an extra differential equation which we have hitherto not mentioned, 
+%
+\begin{equation}
+\frac{dS_l}{dt} = \frac{f_s}{m_s}S_sk_sS_8^0.
+\end{equation}
+%
+This equation was not mentioned because it does not dynamically effect the system. However, introducing this equation does not alleviate lack of mass conservation during charge, namely, 
+%
+\begin{equation}
+\sum_i \frac{dS_i}{dt} = k_sS_8^0.
+\end{equation}
+%
+What about energy conservation? 
+
+\section{General Numerical Method}
+PyBaMM requires initiating the model in some particular ways. We need to clearly define the variables and ensure any functions of the variables are consistent with the PyBaMM library of functions. As such, for later testing we are required to implement all of the functions with the Numpy counterparts to handle numerical data. The specific implementation of all variables, parameters, functions, and solver can be found in the Jupyter notebook. However, it should be noted that in the current iteration of the PyBaMM model, the current is taken as a constant. Therefore, any change in the current requires re-initializing the model. This is discuss in the next section in more detail. PyBaMM DAE solvers are, for all intents and purposes, black-box solvers. However, we do know that the solver using an implicit method. Therefore, an education guess would suggest that the numerical method produces a nonlinear system of equations at each time instant which some root-finding algorithm must solve. Such methods do not guarantee unique solutions and as such it may be a good idea to attempt to find alternative solutions within some small region of the previous time step. For example, search for solutions in a ball of radius defined by the current solution of the PyBaMM solver. If a solution appears, then this brings to question the method. No solution helps validate the model's implementation. 
+
+\section{Initial Conditions and the Ramp-up}
+Due to the nonlinear solver, the computer requires a good initial guess which is consistent with the algebraic condition. The algebraic condition and mass conservation\footnote{Mass conservation is not held by this system and requires further discussion in subsection \ref{subsec:metrics}} gives two constraints for the seven variables. Zero current further constrains the voltage to both $E_H$ an $E_L$, which subsequently equal one another, but this is really a further specification of the algebraic condition. Hence, we have a total of three constraints for seven variables. Therefore, $S_8$, $S_4$, $S$, and $S_s$ are pre-specified while the remaining three variables are solved given the constraints. \\ \\
+The initial condition for all implementations are therefore found under the zero-current condition. To allow for alternative currents, a ramp-up period is implemented whereby the current is quickly changed from zero to the desired initial current. The PyBaMM solver finds the consistent species concentrations at each time step. This process is completed in as little time as possible to keep the initial conditions close to the zero-current conditions.
+
+\section{Validation of Implementation}
+\subsection{Validation Metrics}\label{subsec:metrics}
+We validate all simulations with three metrics. All three metrics require the $L_2$ norm\footnote{This is simply the sum of squares for some data, divided by the quantity of data.}, or some minor deviation thereof. First, we check that the algebraic condition is satisfied. This is performed simply by evaluating the algebraic condition at each time step with the data produced by the method. The $L_2$ norm is applied to this data.  Second, we evaluate the backward Euler estimate for the derivative of each species, 
+%
+\begin{equation}
+\frac{dS_i}{dt}\Bigg|_{t = j\Delta t} \approx \frac{S_i(j\Delta t)-S_i((j-1)\Delta t)}{\Delta t},
+\end{equation}
+%
+and compare with the value of the functions on the right hand side of the dynamical system, evaluated at $t = j\Delta t$. The $L_2$ norm of the difference between these values for each time step is then implemented. The norm is not expected to be equal to zero, and in particular greater than the other norms, for two reasons. First, the numerical derivative is inexact and should not equal the derivative function. Moreover, the derivative functions will had some small error due to numerical evaluations and floating point arithmetic. Finally, we take the maximum $L_2$ norm across all species. \\ \\
+Finally, we consider the pseudo mass conservation condition. The sum of the right hand side functions of the ODE system will add to a value which should be zero if mass was conserved. This system does not have mass conservation, but we can sum the functions nonetheless and compare the values with the expected values. In particular, 
+%
+\begin{equation}
+\sum_i f_i(\boldsymbol{S};\boldsymbol{p}) - \left(1-\frac{f_s}{m_s}S_s\right)k_sS_8^0 = 0.
+\end{equation}
+%
+We evaluate the left hand side of the above equation at each time step. The $L_2$ norm is then taken and compared with the expected value of zero. 
+
+\subsection{Zero Current}
+Zero current is an equilibrium condition for the system. Therefore we should expect all variables are constant and equal to their initial conditions for this simulation. 
+\subsection{Comparison with Matlab Implementation}
+We may compare the Matlab output by the $L_2$ norm metric, which is simply sum of the squares of the difference between each data point at each time instant,
+%
+\begin{equation}
+M = \sum_i\sum_j (S_{ij}^p-S_{ij}^m)^2,
+\end{equation}
+%
+where $S_{ij}^p$ is the PyBaMM data of species $i$ (including voltage) at time step $j$, and similarly for the Matlab data $S_{ij}^m$.
+\subsubsection{Ramp-up}
+\subsubsection{Discharge}
+\subsubsection{Charge}
+
+\section{Initial state Solver}
+Given a voltage time series, we should be able to retrieve the initial state. This methodology is further discussed in the document "initial State Determination" . 
+
+\end{document}
