@@ -39,7 +39,7 @@ model = pybamm.BaseModel()
 
 # constants
 # Set Parameters values normally
-
+# ------------------- Section w all input parameters (incl current)-------------------
 R = 8.3145
 T = 298
 F = 9.649 * (10**4)
@@ -66,8 +66,10 @@ ih0 = 1
 il0 = 0.5
 ar = 0.960
 m_s = 2.7
-I = 0.08  # change
-
+V_min = 2.1
+V_max = 2.45
+I = 0.3  # change
+# ------------------- Section w useful groups of parameters -------------------
 i_h_term_coef = ns8 * Ms * I * v * rho_s / (ne * F * k_p * (m_s**2))
 
 i_coef = ne * F / (2 * R * T)
@@ -77,14 +79,13 @@ i_l_coef = -2 * il0 * ar
 E_H_coef = R * T / (4 * F)
 f_h = (ns4**2) * Ms * v / ns8
 f_l = (ns**2) * ns2 * Ms**2 * (v**2) / ns4
-V_min=2.1
-V_max=2.45
+
 params = [R, T, F, v, EH0, EL0, k_p, k_s, f_s, S_star,
           rho_s, Ms, ne, ns, ns2, ns4, ns8, n4, ih0,
           il0, ar, m_s, I, i_h_term_coef, i_coef,
-          i_h_coef, i_l_coef, E_H_coef, f_h, f_l]
+          i_h_coef, i_l_coef, E_H_coef, f_h, f_l]  # create params as array w all parameters
 
-# ------------------------ Variables ------------------------
+# ------------------------ Model Variables ------------------------
 S8 = pybamm.Variable("S8")
 S4 = pybamm.Variable("S4")
 S2 = pybamm.Variable("S2")
@@ -93,11 +94,10 @@ Sp = pybamm.Variable("Sp")
 Ss = pybamm.Variable("Ss")
 V = pybamm.Variable("V")
 
-
 model.variables = {"S8": S8, "S4": S4, "S2": S2, "S": S, "Sp": Sp, "Ss": Ss, "V": V}
 
 
-# ----------------------- Governing equations using numpy -----------------------
+# ----------------------- Governing equations using numpy. Used to derive initial conditions -----------------------
 # Nernst linking overpotential and species concentrations
 
 
@@ -175,7 +175,7 @@ def algebraic_condition_func_np(data, params):
     return i_H_np(data, params) + i_L_np(data, params) - I
 
 
-# RHS of ODE functions
+# RHS of ODE functions. Time evolution of all species. not used?
 def f8_np(data, params):
     # unpack parameter list
     R, T, F, v, EH0, EL0, k_p, k_s, f_s, S_star, \
@@ -254,30 +254,19 @@ def f_np(data, params):
 
     return (2 * ns * Ms * i_L_np(data, params) / (n4 * F)) - (k_p * Sp * (S - S_star) / (v * rho_s))
 
+# ----------------------- Initial conditions -----------------------
 
-# # time derivatives of species concentration
-#
-# dS8dt = -(nS8 * mm / (ne * F) * iH(iH0, ar, ne, F, V, S8, S4, EH0, fH)) - ks * S8
-# dS4dt = 2 * (nS4 * mm) / (ne * F) * iH(iH0, ar, ne, F, V, S8, S4, EH0, fH) + (1 - (fs * Ss / mm)) * ks * S8 - (
-#             nS4 * mm / ne * F) * iL(iL0, ar, ne, F, V, S4, S2, S, EL0, fL)
-# dS2dt = nS2 * mm * iL(iL0, ar, ne, F, V, S4, S2, S, EL0, fL) / (ne * F)
-# dSdt = (2 * nS * mm) / (ne * F) * iL(iL0, ar, ne, F, V, S4, S2, S, EL0, fL) - (kp * Sp * (S - Ssat) / (Ve * rhoS))
-# dSpdt = 1 / (Ve * rhoS) * kp * Sp * (S - Ssat)
-# dSsdt = ks * S8
 S8_initial = 0.998 * m_s
 S4_initial = 0.001 * m_s
-# S_initial = S_star
-S_initial=0.0000001*m_s
+S_initial = S_star # not defined in matlab, instead initial Sp is defined as:
+# Sp_initial=0.0000001*m_s in matlab
 Ss_initial = 0
 I_initial = 0
-
-# ----------------------- Initial conditions approach I------------------
-# Solve for initial voltage
 
 ########################## Derived Initial Conditions ##################################
 
 # Solve for initial voltage
-data1 = S8_initial, S4_initial, S_initial, 'null', 'null', Ss_initial, 'null'
+data1 = S8_initial, S4_initial, S_initial, 'null', 'null', Ss_initial, 'null' # create temp data array for initial conditions
 V_initial = E_H_np(data1, params)
 
 # Solve for S2_initial
@@ -285,8 +274,6 @@ S2_initial = np.exp(n4 * F * (EL0 - V_initial) / (R * T)) * (f_l * S4_initial / 
 
 # Solve for Sp_initial
 Sp_initial = m_s - S8_initial - S4_initial - S2_initial - S_initial - Ss_initial
-data1 = S8_initial, S4_initial, S_initial, 'null', 'null', Ss_initial, 'null'
-V_initial = E_H_np(data1, params)
 
 # Initial Conditions
 model.initial_conditions = {S8: pybamm.Scalar(S8_initial), S4: pybamm.Scalar(S4_initial), S2: pybamm.Scalar(S2_initial),
@@ -294,8 +281,8 @@ model.initial_conditions = {S8: pybamm.Scalar(S8_initial), S4: pybamm.Scalar(S4_
                             V: pybamm.Scalar(V_initial)}
 
 
-################# Nested Functions With PyBaMM ##################################
-
+################# Nested Functions using PyBaMM ##################################
+# functions used to run simulation after initial cond have been established
 # Nernst Potentials
 
 def E_H(data, params):
@@ -459,7 +446,6 @@ dSpdt = fp(S8, S4, S2, S, Sp, Ss, V, params)
 dSsdt = fs(S8, S4, S2, S, Sp, Ss, V, params)
 dSdt = f(S8, S4, S2, S, Sp, Ss, V, params)
 
-
 # Algebraic Condition
 algebraic_condition = algebraic_condition_func(S8, S4, S2, S, Sp, Ss, V, params)
 
@@ -469,12 +455,11 @@ model.rhs = {S8: dS8dt,
              S2: dS2dt,
              S: dSdt,
              Sp: dSpdt,
-             Ss: dSsdt,}
+             Ss: dSsdt, }
 model.algebraic = {V: algebraic_condition}
 
-model.events = {pybamm.Event("Minimum voltage", V - V_min),pybamm.Event("Maximum voltage", V_max-V)} #Events will stop the solver whenever they return 0
-
-
+model.events = {pybamm.Event("Minimum voltage", V - V_min),
+                pybamm.Event("Maximum voltage", V_max - V)}  # Events will stop the solver whenever they return 0
 
 disc = pybamm.Discretisation()  # use the default discretisation
 disc.process_model(model);
@@ -482,9 +467,8 @@ disc.process_model(model);
 # solver initiated
 dae_solver = pybamm.ScikitsDaeSolver(atol=1e-2, rtol=1e-2)
 
-
 seconds = 3600 * 25
-dt = 1 # change, 0,2 work for I=3, 2 works for I=1
+dt = 0.5  # change, 0,2 work for I=3, 2 works for I=1
 t = np.linspace(0, seconds, int(seconds / dt))
 solution = dae_solver.solve(model, t)
 
@@ -497,8 +481,6 @@ S_sol = solution["S"].data
 Sp_sol = solution["Sp"].data
 Ss_sol = solution["Ss"].data
 V_sol = solution["V"].data
-# V_sol = solution["V"].data
-
 
 data = t_sol, S8_sol, S4_sol, S2_sol, S_sol, Sp_sol, Ss_sol, V_sol
 
@@ -513,9 +495,10 @@ plt.plot(t_sol, S4_sol)
 plt.plot(t_sol, S_sol)
 plt.plot(t_sol, Ss_sol)
 plt.plot(t_sol, Sp_sol)
+# plt.ylim([0, 0.001])
 plt.xlabel('time [s]')
 plt.ylabel('Species [g]')
-plt.legend(['$S_8$', '$S_4$','$S$', '$Ss$', '$S_p$',])
+plt.legend(['$S_8$', '$S_4$', '$S$', '$Ss$', '$S_p$', ])
 
 plt.show()
 
@@ -595,15 +578,16 @@ def psuedo_mass_conservation_test(data, params):
                - (1 - (f_s * Ss_sol[1:n] / m_s)) * k_s * S8_sol[1:n]
 
     return norm(Sum_data)
-print('Algebraic Error: {}'.format(algebraic_test(data,params)))
-print('Maximum Derivative Error: {}'.format(np.max(derivative_test(data,params))))
-print('Psuedo Mass Conservation Error: {}'.format(psuedo_mass_conservation_test(data,params)))
 
-# I=0.01
-ramping='off'
+
+print('Algebraic Error: {}'.format(algebraic_test(data, params)))
+print('Maximum Derivative Error: {}'.format(np.max(derivative_test(data, params))))
+print('Psuedo Mass Conservation Error: {}'.format(psuedo_mass_conservation_test(data, params)))
+
+ramping = 'off'
 # initialize parameters
-if ramping=='on':
-# ramp up over one second
+if ramping == 'on':
+    # ramp up over one second
     dtr = 1e-2
     n = int(1 / dtr)
     t_ramp = np.linspace(0, 1, n)
@@ -670,7 +654,8 @@ if ramping=='on':
 
         model.algebraic = {V: algebraic_condition}
         model.events = {pybamm.Event("Minimum voltage", V - V_min),
-                        pybamm.Event("Maximum voltage", V_max - V)}  # Events will stop the solver whenever they return 0
+                        pybamm.Event("Maximum voltage",
+                                     V_max - V)}  # Events will stop the solver whenever they return 0
 
         # update current
         I = I_ramp[i]
@@ -763,19 +748,18 @@ if ramping=='on':
     solution = dae_solver.solve(model, t)
 
     # retrieve data
-    t_sol  = solution.t
+    t_sol = solution.t
     S8_sol = solution["S8"].data
     S4_sol = solution["S4"].data
     S2_sol = solution["S2"].data
-    S_sol  = solution["S"].data
+    S_sol = solution["S"].data
     Sp_sol = solution["Sp"].data
     Ss_sol = solution["Ss"].data
-    V_sol  = solution["V"].data
+    V_sol = solution["V"].data
 
     data = t_sol, S8_sol, S4_sol, S2_sol, S_sol, Sp_sol, Ss_sol, V_sol
 
     # plotting
-
 
     plt.figure(1)
     plt.plot(t_sol, V_sol)
