@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import fsolve
+
 import pybamm
 
 # empty model framework
@@ -70,19 +71,17 @@ m_s = 2.7
 V_min = 2.10
 V_max = 2.45
 
-I_op = 2 # user input
-I_initial=0
-I=I_op
+I_op = 2  # user input
+I_initial = 0
+I = I_op
 
-if I<0:
-    k_s=0.00003
+if I < 0:
+    k_s = 0.00003
 
-
-
-CellQ=m_s*12/8*F/Ms*1/3600 #cell capacity in Ah. used to calculate approx discharge/charge duration
+CellQ = m_s * 12 / 8 * F / Ms * 1 / 3600  # cell capacity in Ah. used to calculate approx discharge/charge duration
 
 # ------------------- Section w useful groups of parameters -------------------
-i_h_term_coef = ns8 * Ms * I * v * rho_s / (ne * F * k_p * (m_s**2)) # what is this used for?
+i_h_term_coef = ns8 * Ms * I * v * rho_s / (ne * F * k_p * (m_s**2))  # what is this used for?
 
 i_coef = ne * F / (2 * R * T)
 i_h_coef = -2 * ih0 * ar
@@ -184,9 +183,7 @@ def algebraic_condition_func_np(data, params):
     il0, ar, m_s, I, i_h_term_coef, i_coef, \
     i_h_coef, i_l_coef, E_H_coef, f_h, f_l = params
 
-
     return i_H_np(data, params) + i_L_np(data, params) - I
-
 
 
 # -----------------------------RHS of ODE functions. Time evolution of all species. not used?
@@ -242,6 +239,7 @@ def fp_np(data, params):
 
     return k_p * Sp * (S - S_star) / (v * rho_s)
 
+
 #
 # def fs_np(data, params):
 #     # unpack parameter list
@@ -266,9 +264,7 @@ def f_np(data, params):
     # unpack data list
     S8, S4, S2, S, Sp, Ss, V = data
 
-
     return (2 * ns * Ms * i_L_np(data, params) / (n4 * F)) - (k_p * Sp * (S - S_star) / (v * rho_s))
-
 
 
 ################# Nested Functions using PyBaMM ##################################
@@ -349,8 +345,7 @@ def algebraic_condition_func(S8, S4, S2, S, Sp, Ss, V, params):
     data = S8, S4, S2, S, Sp, Ss, V
 
     # return abs(iH) + abs(iL) - I
-    return i_H(data, params)+i_L(data, params)-I
-
+    return i_H(data, params) + i_L(data, params) - I
 
 
 ################### Dynamic Equations ########################################
@@ -369,7 +364,6 @@ def f8(S8, S4, S2, S, Sp, Ss, V, params):
     return -(ns8 * Ms * i_H(data, params) / (n4 * F)) - k_s * S8
 
 
-
 def f4(S8, S4, S2, S, Sp, Ss, V, params):
     # unpack parameter list
     R, T, F, v, EH0, EL0, k_p, k_s, f_s, S_star, \
@@ -380,7 +374,8 @@ def f4(S8, S4, S2, S, Sp, Ss, V, params):
     # pack data list
     data = S8, S4, S2, S, Sp, Ss, V
 
-    return (2*ns4*Ms*i_H(data,params)/(n4*F)) + (1-(f_s*Ss/m_s))*k_s*S8 - (ns4*Ms*i_L(data,params)/(n4*F))
+    return (2 * ns4 * Ms * i_H(data, params) / (n4 * F)) + (1 - (f_s * Ss / m_s)) * k_s * S8 - (
+                ns4 * Ms * i_L(data, params) / (n4 * F))
 
 
 def f2(S8, S4, S2, S, Sp, Ss, V, params):
@@ -393,8 +388,7 @@ def f2(S8, S4, S2, S, Sp, Ss, V, params):
     # pack data list
     data = S8, S4, S2, S, Sp, Ss, V
 
-    return ns2*Ms*i_L(data,params)/(n4*F)
-
+    return ns2 * Ms * i_L(data, params) / (n4 * F)
 
 
 def fp(S8, S4, S2, S, Sp, Ss, V, params):
@@ -404,7 +398,7 @@ def fp(S8, S4, S2, S, Sp, Ss, V, params):
     il0, ar, m_s, I, i_h_term_coef, i_coef, \
     i_h_coef, i_l_coef, E_H_coef, f_h, f_l = params
 
-    return k_p*Sp*(S-S_star)/(v*rho_s)
+    return k_p * Sp * (S - S_star) / (v * rho_s)
 
 
 def fs(S8, S4, S2, S, Sp, Ss, V, params):
@@ -427,7 +421,7 @@ def f(S8, S4, S2, S, Sp, Ss, V, params):
     # pack data list
     data = S8, S4, S2, S, Sp, Ss, V
 
-    return (2*ns*Ms*i_L(data,params)/(n4*F)) - (k_p*Sp*(S-S_star)/(v*rho_s))
+    return (2 * ns * Ms * i_L(data, params) / (n4 * F)) - (k_p * Sp * (S - S_star) / (v * rho_s))
 
 
 # ODEs
@@ -443,42 +437,49 @@ dSdt = f(S8, S4, S2, S, Sp, Ss, V, params)
 S8_initial = 0.998 * m_s
 S4_initial = 0.001 * m_s
 # S_initial = S_star # not defined in matlab, instead initial Sp is defined as:
-Sp_initial=0.000001*m_s #in matlab
+Sp_initial = 0.000001 * m_s  # in matlab
 Ss_initial = 0
 
 ########################## Derived Initial Conditions ##################################
 
 # Solve for initial voltage
-data_temp = (S8_initial, S4_initial, 'null', 'null', Sp_initial, 'null','null') # create temp data array for initial conditions
-V_initial = E_H_np(data_temp, params) # zero overpotential
-EL_initial=E_H_np(data_temp, params) # zero overpotential
+data_temp = (
+S8_initial, S4_initial, 'null', 'null', Sp_initial, 'null', 'null')  # create temp data array for initial conditions
+V_initial = E_H_np(data_temp, params)  # zero overpotential
+EL_initial = E_H_np(data_temp, params)  # zero overpotential
 
 # How much S and S2 have been produced to satisfy EL=EH.  not with respect to mass ratio but w respect to simplified activity (stoich raised to power)
-Sprod = f_l * S4_initial/np.exp((EL_initial-EL0)*n4*F/(R*T)) # 0.655=f_l in matlab
+Sprod = f_l * S4_initial / np.exp((EL_initial - EL0) * n4 * F / (R * T))  # 0.655=f_l in matlab
 
-def fS_in(x,m_s,S8_initial,S4_initial,Sp_initial,Sprod): #identifying S and S2 mass that fullfil El, and mass conservation
+
+def fS_in(x, m_s, S8_initial, S4_initial, Sp_initial,
+          Sprod):  # identifying S and S2 mass that fullfil El, and mass conservation
     # substituting S2 by Sprod/S^2 from El eq and using mass conservation eq.
-    return (x**2*(m_s-S8_initial-S4_initial-Sp_initial-x)-Sprod)
-x0=Sprod**(1/float(3)) # The starting estimate for the roots of fS_in, assuming the mass of the two species are similar. satisfy EL eq
+    return (x**2 * (m_s - S8_initial - S4_initial - Sp_initial - x) - Sprod)
 
-S_initial=fsolve(fS_in,x0,args=(m_s,S8_initial,S4_initial,Sp_initial,Sprod))[0] # change, should be S_initial
 
-S2_initial=m_s - S8_initial - S4_initial - Sp_initial - S_initial
-print((EL0 + E_H_coef * np.log(f_l * S4_initial / (S2_initial * (S_initial**2)))-V_initial), 'pybamm error')
-print((EL0 + E_H_coef * np.log(f_l * S4_initial / (S_initial * (S2_initial**2)))-V_initial), 'matlab error')
+x0 = Sprod**(1 / float(
+    3))  # The starting estimate for the roots of fS_in, assuming the mass of the two species are similar. satisfy EL eq
+
+S_initial = fsolve(fS_in, x0, args=(m_s, S8_initial, S4_initial, Sp_initial, Sprod))[0]  # change, should be S_initial
+
+S2_initial = m_s - S8_initial - S4_initial - Sp_initial - S_initial
+print((EL0 + E_H_coef * np.log(f_l * S4_initial / (S2_initial * (S_initial**2))) - V_initial), 'pybamm error')
+print((EL0 + E_H_coef * np.log(f_l * S4_initial / (S_initial * (S2_initial**2))) - V_initial), 'matlab error')
 
 # we now have the initial conditions before equilibrating the cell at zero current
 # test if these satisfy the following:
-test_data=(S8_initial, S4_initial,S2_initial,S_initial, Sp_initial,Ss_initial,V_initial)
-error_mass=m_s - S8_initial - S4_initial - S2_initial - S_initial - Sp_initial
-error_iH=i_H_np(test_data, params)
-error_iL=i_L_np(test_data, params)
-error_etaH=0-eta_H_np(test_data, params)
-error_etaL=0-eta_L_np(test_data, params)
-error_EH=V_initial-E_H_np(test_data, params)
-print('errors before equilibration',error_iH,error_mass,error_iL,error_EH,error_etaH,error_etaL)
-print('concentrations + Voltage before equilibration',S8_initial,S4_initial,S2_initial,S_initial,Sp_initial,V_initial)
-if I<0:
+test_data = (S8_initial, S4_initial, S2_initial, S_initial, Sp_initial, Ss_initial, V_initial)
+error_mass = m_s - S8_initial - S4_initial - S2_initial - S_initial - Sp_initial
+error_iH = i_H_np(test_data, params)
+error_iL = i_L_np(test_data, params)
+error_etaH = 0 - eta_H_np(test_data, params)
+error_etaL = 0 - eta_L_np(test_data, params)
+error_EH = V_initial - E_H_np(test_data, params)
+print('errors before equilibration', error_iH, error_mass, error_iL, error_EH, error_etaH, error_etaL)
+print('concentrations + Voltage before equilibration', S8_initial, S4_initial, S2_initial, S_initial, Sp_initial,
+      V_initial)
+if I < 0:
     # S8_initial=9.760406939906879e-12
     # S4_initial=0.011986387118342958
     # S2_initial=1.3453541055524958
@@ -490,9 +491,10 @@ if I<0:
     S8_initial = 9.76e-8
     S4_initial = 0.0085
     # S_initial = S_star # not defined in matlab, instead initial Sp is defined as:
-    Sp_initial = 1.35 # or 0.5*m_s
+    Sp_initial = 1.35  # or 0.5*m_s
     Ss_initial = 0
-    data_temp = (S8_initial, S4_initial, 'null', 'null', Sp_initial, 'null', 'null')  # create temp data array for initial conditions
+    data_temp = (
+    S8_initial, S4_initial, 'null', 'null', Sp_initial, 'null', 'null')  # create temp data array for initial conditions
     V_initial = E_H_np(data_temp, params)  # zero overpotential
     EL_initial = E_H_np(data_temp, params)  # zero overpotential
 
@@ -516,8 +518,8 @@ if I<0:
 
 # Initial Conditions used to equilibrate cell at zero current. these are "final"/equilibrated initial conditions if S<S_star.
 model.initial_conditions = {S8: pybamm.Scalar(S8_initial), S4: pybamm.Scalar(S4_initial), S2: pybamm.Scalar(S2_initial),
-                             S: pybamm.Scalar(S_initial), Sp: pybamm.Scalar(Sp_initial), Ss: pybamm.Scalar(Ss_initial),
-                             V: pybamm.Scalar(V_initial)}
+                            S: pybamm.Scalar(S_initial), Sp: pybamm.Scalar(Sp_initial), Ss: pybamm.Scalar(Ss_initial),
+                            V: pybamm.Scalar(V_initial)}
 # Algebraic Condition
 algebraic_condition = algebraic_condition_func(S8, S4, S2, S, Sp, Ss, V, params)
 
@@ -530,13 +532,15 @@ model.rhs = {S8: dS8dt,
              Ss: dSsdt, }
 model.algebraic = {V: algebraic_condition}
 
-if I>0:
-    model.events = {pybamm.Event("Maximum voltage", V_max - V),pybamm.Event("Sp",Sp-0.49869*m_s)} # Events will stop the solver whenever they return 0
+if I > 0:
+    model.events = {pybamm.Event("Maximum voltage", V_max - V),
+                    pybamm.Event("Sp", Sp - 0.49869 * m_s)}  # Events will stop the solver whenever they return 0
     seconds = abs(CellQ / I_op * 3600)
 
-if I<0:
-    model.events = {pybamm.Event("Minimum voltage", V - V_min),pybamm.Event("S4",S4-1e-5)}  # Events will stop the solver whenever they return 0
-    seconds = abs(CellQ / I_op * 3600)*2 # allow for longer charge times due to shuttle during slow discharge
+if I < 0:
+    model.events = {pybamm.Event("Minimum voltage", V - V_min),
+                    pybamm.Event("S4", S4 - 1e-5)}  # Events will stop the solver whenever they return 0
+    seconds = abs(CellQ / I_op * 3600) * 2  # allow for longer charge times due to shuttle during slow discharge
 disc = pybamm.Discretisation()  # use the default discretisation
 disc.process_model(model);
 
@@ -558,7 +562,8 @@ S_sol = solution["S"].data
 Sp_sol = solution["Sp"].data
 Ss_sol = solution["Ss"].data
 V_sol = solution["V"].data
-print('t',t_sol[-1],'S8 end',S8_sol[-1],'S4 end',S4_sol[-1],'S2 end',S2_sol[-1],'S end',S_sol[-1],'Sp end',Sp_sol[-1],'V end',V_sol[-1])
+print('t', t_sol[-1], 'S8 end', S8_sol[-1], 'S4 end', S4_sol[-1], 'S2 end', S2_sol[-1], 'S end', S_sol[-1], 'Sp end',
+      Sp_sol[-1], 'V end', V_sol[-1])
 # print(Sp_sol)
 # plotting
 
@@ -566,7 +571,7 @@ plt.figure(1)
 plt.plot(t_sol, V_sol)
 plt.xlabel('time [s]')
 plt.ylabel('Voltage [V]')
-plt.title("Voltage curve %.2f A " %I + "t=%i sec. w termination event" %t_sol[-1])
+plt.title("Voltage curve %.2f A " % I + "t=%i sec. w termination event" % t_sol[-1])
 
 plt.figure(2)
 plt.plot(t_sol, S8_sol)
@@ -578,8 +583,7 @@ plt.plot(t_sol, Sp_sol)
 plt.xlabel('time [s]')
 plt.ylabel('Species [g]')
 
-plt.title("Species concentration %.2f A " % I + "t=%i sec. w termination event" %t_sol[-1])
-plt.legend(['$S_8$', '$S_4$','$S_2$', '$S$', '$S_s$', '$S_p$'])
-
+plt.title("Species concentration %.2f A " % I + "t=%i sec. w termination event" % t_sol[-1])
+plt.legend(['$S_8$', '$S_4$', '$S_2$', '$S$', '$S_s$', '$S_p$'])
 
 plt.show()
