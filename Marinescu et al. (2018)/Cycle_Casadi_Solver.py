@@ -525,7 +525,7 @@ def run(initial_data,params,seconds):
     return solution
 
 def append_data(solution,cycle_history):
-    # unpack data of new run
+    # unpack data of previous runs
     t, S8, S4, S2, S, Sp, Ss, V = cycle_history
 
     # unpack data of new run
@@ -557,6 +557,25 @@ def new_initial_condition(cycle_history):
 
     return initial_condition
 
+def additional_outputs(cycle_history, params):
+    # unpack data of experiment
+    t, S8, S4, S2, S, Sp, Ss, V = cycle_history
+
+    # pack species and voltage data only
+    data = S8, S4, S2, S, Sp, Ss, V
+
+    E_H = E_H_np(data, params)
+    E_L = E_L_np(data, params)
+    eta_H = eta_H_np(data, params)
+    eta_L = eta_L_np(data, params)
+    i_H = i_H_np(data, params)
+    i_L = i_L_np(data, params)
+
+    # pack derived data
+    derived_data = E_H, E_L, eta_H, eta_L, i_H, i_L
+
+    return derived_data
+
 def cycle(currents, intervals):
     # Perform initial discharge
     n = len(currents)
@@ -579,7 +598,9 @@ def cycle(currents, intervals):
         solution = run(initial_data, params, seconds)
         cycle_history = append_data(solution, cycle_history)
 
-    return cycle_history, params
+    derived_data = additional_outputs(cycle_history, params)
+
+    return cycle_history, params, derived_data
 
 def plot_data(cycle_history, params):
     # Note that none of these plot functions require the current,
@@ -652,11 +673,23 @@ def plot_data(cycle_history, params):
 
 
 ######################################### Actual Run ###################################################
-# To run the above code, you should call in the Python Console some variation of
+# To run the above code, you should call in the Python Console some variation of what is written
+# between the triple inverted commas
+#
+# The data outputs are as follows:
+#
+# cycle_history = t, S8, S4, S2, S, Sp, Ss, V
+#
+# params =  R, T, F, v, EH0, EL0, k_p, k_s, f_s, S_star, \
+#           rho_s, Ms, ne, ns, ns2, ns4, ns8, n4, ih0, \
+#           il0, ar, m_s, I, i_h_term_coef, i_coef, \
+#           i_h_coef, i_l_coef, E_H_coef, f_h, f_l
+#
+# derived_data = E_H, E_L, eta_H, eta_L, i_H, i_L 
 '''
 from Cycle_Casadi_Solver import cycle, plot_data
 intervals = [12000,9000,8000,2000]
 currents = [1,-1,1,-1]
-cycle_history, params = cycle(currents,intervals)
+cycle_history, params, derived_data = cycle(currents,intervals)
 plot_data(cycle_history,params)
 '''
