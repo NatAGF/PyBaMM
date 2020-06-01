@@ -7,7 +7,8 @@ import pybamm
 start_time = time.time()
 
 
-I=-1
+I=-0.33
+
 # constants
 # Set Parameters values normally
 # ------------------- Section w all input parameters (incl current)-------------------
@@ -20,15 +21,9 @@ EH0 = 2.35
 EL0 = 2.18
 
 k_p = 100
-if I < 0:  # on charge, allow shuttle
-    k_s0 = 0.00003  # at reference temperature T0, paper: 0.00003
-else:
-    k_s0 = 0.000000000000000001
 
-temp_effect='off'
-
-f_s = 0 # 0.25
-S_star = 0.00005
+f_s = 0.25 # 0.25, need to make zero to reproduce infinite charging???
+S_star = 0.00005 #0.00005
 rho_s = 2 * (10**3)
 
 Ms = 32
@@ -49,17 +44,26 @@ V_max = 2.5
 
 T0 = 298  # K. reference temperature.
 Ta = 298  # K. ambient temperature.
-mc = 40  # cell mass in g TODO: should be a function of m_s
+mc = 16*m_s  # cell mass in g. ratio from T paper TODO: should be a function of m_s
 ch = 2  # J/(g K). cell specific heat capacity
-h = 0.002  # W/k. total cell heat transfer coefficient  TODO: should be a function of mc or m_s
+h = 0.1+0.1*mc/129  # W/k. total cell heat transfer coefficient.ratio from T paper  TODO: should be a function of mc or m_s
 Na = 6.0221*10**(23)# 1/mol. Avogadro number
+if I < 0:  # on charge, allow shuttle
+    k_s0 = 0.00003  # at reference temperature T0, paper: 0.00003. T paper 2.75*10E−5
+else:
+    k_s0 = 0.0000000000000000001
+
+temp_effect='off'
+
 if temp_effect=='on':
     print('temperature effect on')
+    k_s0=2.75*10**(-5)
 
     A = 8.9712 * 10**(-20)  # J/mol. pre-exponential factor in Arrhenius eq for k_s
 if temp_effect=='off':
-    print('temperature effect off')
-    A=0 # means ks has no temperature dependency and will always be k0.
+    print('temperature effect off, k_s=')
+    print(k_s0)
+    A=0 # means ks has no temperature dependency and will always be k_s0.
 
 else:
     print('temperature effect should be either on or off')
@@ -438,17 +442,20 @@ if I>0:
     # S_initial = S_star # not defined in matlab, instead initial Sp is defined as:
     Sp_initial = 0.000001 * m_s  # in matlab
     Ss_initial = 0
-else: # from 1A discharge
-    S8_initial = 7.40E-14 #TODO: should be defined as share of m_s
+if I<0: # from 1A discharge
+    S8_initial = 7.40E-10 #TODO: should be defined as share of m_s
 
     S4_initial = 1.56E-3 #TODO: should be defined as share of m_s
+
+
+
     # S_initial = S_star # not defined in matlab, instead initial Sp is defined as:
     Sp_initial = 0.5*m_s
     Ss_initial = 0
 
 
 CellQ = m_s * 12 / 8 * F / Ms * 1 / 3600   # cell capacity in Ah. used to calculate approx discharge/charge duration
-
+C_rate=I/CellQ
     ########################## Derived Initial Conditions ##################################
 
 # Solve for initial voltage
@@ -542,10 +549,11 @@ if I > 0:
 
 if I < 0:
     model.events = {pybamm.Event("Minimum voltage", V - V_min),
-                    pybamm.Event("S4", S4 - 1e-6)}  # Events will stop the solver whenever they return 0
-    seconds = abs(CellQ / I * 3600*1.5)  # allow for longer charge times due to shuttle during slow discharge
+                    pybamm.Event("S4", S4-1e-6),pybamm.Event("Sp",Sp-0.0015120941527763303)}  # Events will stop the solver whenever they return 0
+    seconds = abs(CellQ / I * 3600*2.5)  # allow for longer charge times due to shuttle during slow discharge
 disc = pybamm.Discretisation()  # use the default discretisation
 disc.process_model(model);
+
 
 # tol = 1e-9
 # dae_solver = pybamm.CasadiSolver(mode="safe",
@@ -569,8 +577,10 @@ Sp_sol = solution["Sp"].data
 Ss_sol = solution["Ss"].data
 V_sol = solution["V"].data
 T_sol = solution["T"].data
+print(S8_sol[-1],S4_sol[-1],S2_sol[-1],S_sol[-1],Sp_sol[-1],t_sol[-1])
 solution = t_sol, S8_sol, S4_sol, S2_sol, S_sol, Sp_sol, Ss_sol, V_sol, T_sol
 
+print("--- %s seconds ---" % (time.time() - start_time))
 
 
 # Note that none of these plot functions require the current,
@@ -594,7 +604,7 @@ plt.figure(1)
 plt.plot(t_sol, V_sol)
 plt.xlabel('time [s]')
 plt.ylabel('Voltage [V]')
-
+plt.title('Cell Voltage for %.2fC' %C_rate)
 plt.figure(2)
 plt.plot(t_sol, S8_sol)
 plt.plot(t_sol, S4_sol)
@@ -604,41 +614,42 @@ plt.plot(t_sol, Ss_sol)
 plt.plot(t_sol, Sp_sol)
 plt.xlabel('time [s]')
 plt.ylabel('Species [g]')
+plt.title('Concentration of species for %.2fC' %C_rate)
 
 plt.legend(['$S_8$', '$S_4$','$S_2$', '$S$', '$S_s$', '$S_p$'])
 # plt.legend([ '$S$', '$S_s$', '$S_p$'])
-
+plt.savefig('Concentration_%.2fC.png' %C_rate,dpi=1200, format='png', bbox_inches='tight')
 plt.figure(4)
 plt.plot(t_sol, E_H_sol)
 plt.plot(t_sol, E_L_sol)
 plt.xlabel('time [s]')
-plt.ylabel('Potential')
+plt.ylabel('Potential [V]')
 plt.legend(['$E_H$', '$E_L$'])
-plt.title('Cell Potentials')
+plt.title('Cell Potentials for %.2fC' %C_rate)
+plt.savefig('EH_EL_%.2fC.png' %C_rate,dpi=1200, format='png', bbox_inches='tight')
 
 plt.figure(5)
 plt.plot(t_sol, eta_H_sol)
 plt.plot(t_sol, eta_L_sol)
 plt.xlabel('time [s]')
-plt.ylabel('Over-Potential')
+plt.ylabel('Over-Potential [V]')
 plt.legend(['$\eta_H$', '$\eta_L$'])
-plt.title('Cell Over-Potentials')
-
+plt.title('Cell Over-Potentials for %.2fC' %C_rate)
+plt.title('Overpotential_%.2fC.png' %C_rate)
 plt.figure(6)
 plt.plot(t_sol, i_H_sol)
 plt.plot(t_sol, i_L_sol)
 plt.xlabel('time [s]')
 plt.ylabel('Current [A]')
 plt.legend(['$i_H$', '$i_L$'])
-plt.title('Cell Currents')
-
+plt.title('Half Cell Currents for %.2fC' %C_rate)
+plt.savefig('Half_cell_current_%.2fC' %C_rate,dpi=1200, format='png', bbox_inches='tight')
 plt.figure(3)
 plt.plot(t_sol, T_sol)
 
 plt.xlabel('time [s]')
 plt.ylabel('Temperature [K]')
 plt.legend(['Cell Temperature'])
-plt.title('Cell Temperature')
-
+plt.title('Cell Averaged Temperature for %.2fC' %C_rate)
+plt.savefig('Temp_%.2fC.png' %C_rate,dpi=1200, format='png', bbox_inches='tight')
 plt.show()
-print("--- %s seconds ---" % (time.time() - start_time))
